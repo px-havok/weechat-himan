@@ -13,7 +13,7 @@
 #
 # History:
 #   04.09.2019:
-#       v0.1: Initial release
+#       v0.1: Initial release, py3-ok
 #
 
 try:
