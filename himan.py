@@ -5,6 +5,7 @@
 # Hi, man!  What have they been saying about you?
 # Log highlights to a private buffer while /away (or not!)
 # Hi, man! relies on words in weechat.look.highlight
+# https://github.com/px-havok/weechat-himan
 #
 # I wrote this because my good pal narcolept wanted a highmon.pl
 # that looked good with fUrlbuf (https://github.com/px-havok/weechat-furlbuf)
@@ -14,7 +15,9 @@
 # History:
 #   04.09.2019:
 #       v0.1: Initial release, py3-ok
-#
+#   04.11.2019:
+#           : Added 'notify' as an option
+#           : Added hook_config so don't have to reload script for changes.
 
 try:
     import weechat as w
@@ -30,8 +33,9 @@ SCRIPT_LICENSE  = 'GPL3'
 SCRIPT_DESC     = "What have they been saying about you?"
 
 OPTIONS         = {'buffer_color'        : ("gray", 'color of buffer name'),
-                   'nick_color'          : ("gray", 'color of mentioners nick.'),
-                   'only_away'           : ("on", 'only log highlights while /away.'),
+                   'nick_color'          : ("gray", 'color of mentioners nick'),
+                   'notify'              : ("off", 'highlight (notify) buffer if written to'),
+                   'only_away'           : ("on", 'only log highlights while /away'),
                    'outp_left'           : ("<", 'character(s) left of nick'),
                    'outp_left_color'     : ("gray", 'color of character(s) left of nick'),
                    'outp_right'          : (">", 'character(s) right of buffer name'),
@@ -55,20 +59,24 @@ def cg(option):
 
 def himan_buffer_create():
 
-    if not w.buffer_search('python', 'himan'):
-        global himan_buffer
-        himan_buffer = w.buffer_new('himan', 'himan_input_cb', '', '', '')
-        w.buffer_set(himan_buffer, 'title', '-[Hi, man! v' + SCRIPT_VERSION + ']- ' + SCRIPT_DESC)
-        w.buffer_set(himan_buffer, 'notify', '0')
-        w.buffer_set(himan_buffer, 'nicklist', '0')
-    else:
-        pass
+    global himan_buffer
+    himan_buffer = w.buffer_new('himan', 'himan_input_cb', '', '', '')
+    w.buffer_set(himan_buffer, 'title', '-[Hi, man! v' + SCRIPT_VERSION + ']- ' + SCRIPT_DESC)
+    w.buffer_set(himan_buffer, 'nicklist', '0')
+
+    # configurable option to set buffer notify on or off
+    w.buffer_set(himan_buffer, 'notify', '0')
+    if cg('notify') == 'on':
+        w.buffer_set(himan_buffer, 'notify', '1')
+
 
 def checker(data, buffer, date, tags, displayed, highlight, prefix, message):
 
+    # Do nothing if no highlight words set
     if w.config_get('weechat.look.highlight') == '':
         return w.WEECHAT_RC_OK
 
+    # if away logging is on but you're not away, do nothing
     if cg('only_away') == 'on' and not w.buffer_get_string(buffer, 'localvar_away'):
         return w.WEECHAT_RC_OK
 
@@ -85,10 +93,12 @@ def checker(data, buffer, date, tags, displayed, highlight, prefix, message):
         outp_sep = c(cg('outp_sep_color')) + cg('outp_sep') + rst
         buffername = c(cg('buffer_color')) + w.buffer_get_string(buffer, 'short_name') + rst
         sp = ' '
+        # account for ACTION (/me)
         if '*' in prefix:
             sp = ' * '
 
-        himan_buffer_create()
+        if not w.buffer_search('python', 'himan'):
+            himan_buffer_create()
 
         w.prnt(himan_buffer, outp_left + nick + outp_sep + buffername + outp_right + sp + message)
 
@@ -106,12 +116,23 @@ def init_options():
         w.config_set_desc_plugin(option,'%s (default: "%s")' % (value[1], value[0]))
 
 
+# dummy input bar, does nothing.
 def himan_input_cb(data, buffer, input_data):
     return w.WEECHAT_RC_OK
 
 
 def timer_cb(data, remaining_calls):
     w.prnt(w.current_buffer(), '%s' % data)
+    return w.WEECHAT_RC_OK
+
+
+# if notify option changes, update without reloading
+def notify_cb(data, option, value):
+    option = cg('notify')
+    if option == 'on':
+        w.buffer_set(himan_buffer, 'notify', '1')
+    elif option == 'off':
+        w.buffer_set(himan_buffer, 'notify', '0')
     return w.WEECHAT_RC_OK
 
 
@@ -123,7 +144,6 @@ def shutdown_cb():
 
 # ================================[ main ]===============================
 if __name__ == '__main__':
-    global version
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE, SCRIPT_DESC, 'shutdown_cb', ''):
 
         init_options()
@@ -133,5 +153,7 @@ if __name__ == '__main__':
         w.hook_timer(2000, 0, 1, 'timer_cb', '[himan]\tHi, man!  What are they saying about you?\n'
                             '[himan]\tHighlights will be logged to "himan" buffer\n'
                             '[himan]\tOptions: /fset himan')
+
+        w.hook_config("plugins.var.python." + SCRIPT_NAME + ".notify", "notify_cb", "")
 
         w.hook_print('', 'notify_message', '', 0, 'checker', '')
