@@ -58,9 +58,8 @@ def cg(option):
 
 
 def himan_buffer_create():
-
     global himan_buffer
-    himan_buffer = w.buffer_new('himan', 'himan_input_cb', '', '', '')
+    himan_buffer = w.buffer_new('himan', 'himan_input_cb', '', 'himan_buffer_close', '')
     w.buffer_set(himan_buffer, 'title', '-[Hi, man! v' + SCRIPT_VERSION + ']- ' + SCRIPT_DESC)
     w.buffer_set(himan_buffer, 'nicklist', '0')
 
@@ -69,6 +68,10 @@ def himan_buffer_create():
     if cg('notify') == 'on':
         w.buffer_set(himan_buffer, 'notify', '1')
 
+def himan_buffer_close(*kwargs):
+    global himan_buffer
+    himan_buffer = None 
+    return w.WEECHAT_RC_OK 
 
 def checker(data, buffer, date, tags, displayed, highlight, prefix, message):
 
@@ -142,6 +145,17 @@ def shutdown_cb():
     return w.WEECHAT_RC_OK
 
 
+def himan_command(data, buffer, args):
+	global himan_buffer
+
+	if not himan_buffer:
+		w.prnt("", SCRIPT_NAME + ": no himan buffer found, recreating...")
+		himan_buffer_create()
+
+	w.command("", "/buffer " + w.buffer_get_string(himan_buffer, "name"))
+
+	return w.WEECHAT_RC_OK
+
 # ================================[ main ]===============================
 if __name__ == '__main__':
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE, SCRIPT_DESC, 'shutdown_cb', ''):
@@ -149,6 +163,8 @@ if __name__ == '__main__':
         init_options()
 
         himan_buffer_create()
+
+        w.hook_command("himan", "show or recreate himan buffer", "", "", "", "himan_command", "")
 
         w.hook_timer(2000, 0, 1, 'timer_cb', '[himan]\tHi, man!  What are they saying about you?\n'
                             '[himan]\tHighlights will be logged to "himan" buffer\n'
