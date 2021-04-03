@@ -148,7 +148,9 @@ if __name__ == '__main__':
 
         init_options()
 
-        himan_buffer_create()
+        himan_buffer = w.buffer_search('python', 'himan')
+        if himan_buffer is None:
+            himan_buffer_create()
 
         w.hook_timer(2000, 0, 1, 'timer_cb', '[himan]\tHi, man!  What are they saying about you?\n'
                             '[himan]\tHighlights will be logged to "himan" buffer\n'
